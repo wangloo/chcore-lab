@@ -16,6 +16,8 @@
 #include <common/machine.h>
 #include <common/mm.h>
 
+#include <./mm/page_table.h>
+
 ALIGN(STACK_ALIGNMENT)
 char kernel_stack[PLAT_CPU_NUM][KERNEL_STACK_SIZE];
 
@@ -33,6 +35,33 @@ void stack_test(long x)
 	kinfo("leaving stack_test %d\n", x);
 }
 
+void test_pt(void)
+{
+		/* Test both map_apge and unmap_page. */
+	int err;
+	paddr_t pa;
+	vaddr_t va;
+	vmr_prop_t flags;
+	vaddr_t *root;
+	pte_t *entry;
+
+	paddr_t *pas;
+	vaddr_t *vas;
+	int i;
+	int j;
+
+	/* init vmspace */
+	// err = init_vmspace(&space);
+	//root = calloc(PAGE_SIZE, 1);
+	root = get_pages(0);
+	// mu_assert_int_eq(0, err);
+
+	va = 0x100000;
+	err = query_in_pgtbl(root, va, &pa, &entry);
+
+	printk("pa = %llx\n", (u64)pa);
+}
+
 void main(void *addr)
 {
 	/* Init uart */
@@ -46,6 +75,7 @@ void main(void *addr)
 
 	mm_init();
 	kinfo("mm init finished\n");
+
 
 	break_point();
 	return;

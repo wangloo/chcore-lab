@@ -99,7 +99,7 @@ void test_buddy(void)
 	/* check the init state */
 	nget = buddy_num_free_page(&global_mem);
 	ncheck = npages / powl(2, BUDDY_MAX_ORDER - 1);
-	//printf("ncheck is %ld\n", ncheck);
+	printk("ncheck is %lx\n", ncheck);
 	mu_check(nget == ncheck);
 
 	/* alloc single page for $npages times */
@@ -188,6 +188,7 @@ MU_TEST_SUITE(test_suite)
 
 int main(int argc, char *argv[])
 {
+	printk("=====================================\n");
 	MU_RUN_SUITE(test_suite);
 	MU_REPORT();
 	return minunit_status;

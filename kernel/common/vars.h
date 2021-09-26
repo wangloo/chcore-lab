@@ -17,6 +17,7 @@
 #define IDLE_STACK_SIZE         (8192)
 #define STACK_ALIGNMENT         16
 
+/* 用户空间和内核空间的分界线 */
 /* can be different in different architectures */
 #ifndef KBASE
 #define KBASE                0xffffff0000000000

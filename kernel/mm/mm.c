@@ -51,6 +51,15 @@ unsigned long get_ttbr1(void)
 void map_kernel_space(vaddr_t va, paddr_t pa, size_t len)
 {
 	// <lab2>
+	vmr_prop_t flags = 0;
+
+	flags |=  (VMR_WRITE | VMR_READ);
+	
+	/* 得到内核空间的页表基地址TTBR1 */
+	vaddr_t* ttbr1_el1 = (vaddr_t *)get_ttbr1();
+	
+	/*  */
+	map_range_in_pgtbl(ttbr1_el1, va, pa, len, KERNEL_PT);
 
 	// </lab2>
 }
@@ -59,8 +68,9 @@ void kernel_space_check(void)
 {
 	unsigned long kernel_val;
 	for (unsigned long i = 128; i < 256; i++) {
-		kernel_val = *(unsigned long *)(KBASE + (i << 21));
+		kernel_val = *(unsigned long *)(KBASE + (i << 1));
 		kinfo("kernel_val: %lx\n", kernel_val);
+		kdebug("kernel_val: %lx\n", kernel_val);
 	}
 	kinfo("kernel space check pass\n");
 }
@@ -74,21 +84,33 @@ void mm_init(void)
 	u64 npages = 0;
 	u64 start_vaddr = 0;
 
-	free_mem_start =
-	    phys_to_virt(ROUND_UP((vaddr_t) (&img_end), PAGE_SIZE));
-	npages = NPAGES;
-	start_vaddr = START_VADDR;
-	kdebug("[CHCORE] mm: free_mem_start is 0x%lx, free_mem_end is 0x%lx\n",
-	       free_mem_start, phys_to_virt(PHYSICAL_MEM_END));
+	kdebug("img_end:0x%lx\n", &img_end);
 
+	/* 内核镜像结束地址往上称为: free_mem */
+	/* 将 free_mem_start 指定为 img_end(0xa0000)并对齐页面大小 */
+	free_mem_start =
+		phys_to_virt(ROUND_UP((vaddr_t) (&img_end), PAGE_SIZE));
+
+	/* 预留最大页数 */
+	npages = NPAGES;
+
+	/* 规定 (24M + KBASE) 是页面区的起始地址 */
+	start_vaddr = START_VADDR;
+	kdebug("[CHCORE] mm: free_mem_start is 0x%lx, free_mem_end is 0x%lx, PHYSICAL_MEM_END=0x%lx\n",
+	       free_mem_start, phys_to_virt(PHYSICAL_MEM_END), PHYSICAL_MEM_END);
+
+	/* 从start_vaddr开始就是页面区了，自然页元数据的长度不能超过start_vaddr */
+	/* 这里没有规定元数据区的结束地址，只是在上面说明了页面区的起始是24M+KBASE，确保留给元数据区的空间足够 */
 	if ((free_mem_start + npages * sizeof(struct page)) > start_vaddr) {
 		BUG("kernel panic: init_mm metadata is too large!\n");
 	}
 
+	/* 页面元数据区的起始地址 */
 	page_meta_start = (struct page *)free_mem_start;
 	kdebug("page_meta_start: 0x%lx, real_start_vadd: 0x%lx,"
 	       "npages: 0x%lx, meta_page_size: 0x%lx\n",
 	       page_meta_start, start_vaddr, npages, sizeof(struct page));
+
 
 	/* buddy alloctor for managing physical memory */
 	init_buddy(&global_mem, page_meta_start, start_vaddr, npages);
@@ -96,7 +118,8 @@ void mm_init(void)
 	/* slab alloctor for allocating small memory regions */
 	init_slab();
 
-	map_kernel_space(KBASE + (128UL << 21), 128UL << 21, 128UL << 21);
+	// map_kernel_space(KBASE + (128UL << 21), 128UL << 21, 128UL << 21);
+	map_kernel_space(KBASE + (128UL << 1), 128UL << 1, 128UL << 1);
 	//check whether kernel space [KABSE + 256 : KBASE + 512] is mapped 
 	kernel_space_check();
 }

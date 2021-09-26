@@ -27,6 +27,9 @@ int unmap_range_in_pgtbl(vaddr_t * pgtbl, vaddr_t va, size_t len);
 #define KBASE 0xFFFFFF0000000000
 #endif
 
+
+// #define CHCORE
+
 #ifdef CHCORE
 
 #define phys_to_virt(x) ((vaddr_t)((paddr_t)(x) + KBASE))
