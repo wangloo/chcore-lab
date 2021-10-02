@@ -2,19 +2,25 @@
 
 SECTIONS
 {
-    . = TEXT_OFFSET;
-    img_start = .;
+    . = TEXT_OFFSET;   /* 当前指针赋值为 TEXT_OFFSET, 即 0x80000 */
+    img_start = .;     /* 镜像开始地址（ELF 文件入口地址）设为当前指针，即 0x80000 */
     init : {
-        ${init_object}
+        ${init_object} /* 指定 .init 段的内容为 init_object，即 bootloader 编译后的机器码 */
     }
 
-    . = ALIGN(SZ_16K);
+    /* 定义结束后当前指针将自动更新为 .init 段结尾地址 */
 
-    init_end = ABSOLUTE(.);
+    . = ALIGN(SZ_16K); /* 将当前指针对齐至 16K */
 
+    init_end = ABSOLUTE(.); /* 记录下对齐后的当前指针的值，便于后面使用 */
+
+    /* 将 text 段 VMA 设置为 KERNEL_VADDR + init_end， LMA 设置为 init_end */
+    /* KERNEL_VADDR 在 boot/image.h 被设置为 0xffffff000000000 */
     .text KERNEL_VADDR + init_end : AT(init_end) {
         *(.text*)
     }
+
+    /* 下面的处理同上，不特殊指定的话 LMA 和 VMA 都会自动递增 */
 
     . = ALIGN(SZ_64K);
     .data : {

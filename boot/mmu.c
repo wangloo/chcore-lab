@@ -45,14 +45,17 @@ void init_boot_pt(void)
 	u64 kva;
 
 	/* TTBR0_EL1 0-1G */
+	/* 1- 用户空间映射，虚拟地址从0开始 */
 	boot_ttbr0_l0[0] = ((u64) boot_ttbr0_l1) | IS_TABLE | IS_VALID;
 	boot_ttbr0_l1[0] = ((u64) boot_ttbr0_l2) | IS_TABLE | IS_VALID;
 
 	/* Usuable memory: PHYSMEM_START ~ PERIPHERAL_BASE */
+	/* 物理地址[0 - 0x1fffffff]映射到boot_ttbr0_l2对应页表项 */
 	start_entry_idx = PHYSMEM_START / SIZE_2M;
 	end_entry_idx = PERIPHERAL_BASE / SIZE_2M;
 
 	/* Map each 2M page */
+	/* 不使用四级页表，全是2M的大页映射 */
 	for (idx = start_entry_idx; idx < end_entry_idx; ++idx) {
 		boot_ttbr0_l2[idx] = (PHYSMEM_START + idx * SIZE_2M)
 		    | UXN	/* Unprivileged execute never */
@@ -63,12 +66,13 @@ void init_boot_pt(void)
 	}
 
 	/* Peripheral memory: PERIPHERAL_BASE ~ PHYSMEM_END */
-
+	/* 继续映射[0x20000000 - 0x3fffffff] */
 	/* Raspi3b/3b+ Peripherals: 0x3f 00 00 00 - 0x3f ff ff ff */
 	start_entry_idx = end_entry_idx;
 	end_entry_idx = PHYSMEM_END / SIZE_2M;
 
 	/* Map each 2M page */
+	/* 不使用四级页表，全是2M的大页映射 */
 	for (idx = start_entry_idx; idx < end_entry_idx; ++idx) {
 		boot_ttbr0_l2[idx] = (PHYSMEM_START + idx * SIZE_2M)
 		    | UXN	/* Unprivileged execute never */
@@ -81,12 +85,14 @@ void init_boot_pt(void)
 	 * TTBR1_EL1 0-1G
 	 * KERNEL_VADDR: L0 pte index: 510; L1 pte index: 0; L2 pte index: 0.
 	 */
+	/* 2- 内核空间映射，虚拟地址使用偏移:0xffffff0000000000 */
 	kva = KERNEL_VADDR;
 	boot_ttbr1_l0[GET_L0_INDEX(kva)] = ((u64) boot_ttbr1_l1)
 	    | IS_TABLE | IS_VALID;
 	boot_ttbr1_l1[GET_L1_INDEX(kva)] = ((u64) boot_ttbr1_l2)
 	    | IS_TABLE | IS_VALID;
 
+	/* 物理地址[0 - 0x0fffffff]映射到 boot_ttbr1_l2 对应页表项 */
 	start_entry_idx = GET_L2_INDEX(kva);
 	/* Note: assert(start_entry_idx == 0) */
 	end_entry_idx = start_entry_idx + PHYSMEM_BOOT_END / SIZE_2M;
@@ -106,6 +112,7 @@ void init_boot_pt(void)
 	}
 
 	/* Peripheral memory: PERIPHERAL_BASE ~ PHYSMEM_END */
+	/* 物理地址[20000000 - 0x3fffffff]映射到 boot_ttbr1_l2 对应页表项 */
 	start_entry_idx = start_entry_idx + PERIPHERAL_BASE / SIZE_2M;
 	end_entry_idx = PHYSMEM_END / SIZE_2M;
 
@@ -124,6 +131,8 @@ void init_boot_pt(void)
 	 * 0x4000_0000 .. 0xFFFF_FFFF
 	 * 1G is enough. Map 1G page here.
 	 */
+	/* 物理地址[40000000 - 0xffffffff]映射到 boot_ttbr1_l1 对应页表项 */
+	/* 1G的大页使用一级页表直接映射 */
 	kva = KERNEL_VADDR + PHYSMEM_END;
 	boot_ttbr1_l1[GET_L1_INDEX(kva)] = PHYSMEM_END | UXN	/* Unprivileged execute never */
 	    | ACCESSED		/* Set access flag */

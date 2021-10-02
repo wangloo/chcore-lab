@@ -24,12 +24,26 @@ u64 read_fp()
 	return fp;
 }
 
+
 __attribute__ ((optimize("O1")))
 int stack_backtrace()
 {
 	printk("Stack backtrace:\n");
 
 	// Your code here.
+	
+	u64 cur_fp = read_fp();        /* stack_backtrace()'s fp */
+	u64 old_fp = *((u64 *)cur_fp); /* stack_test(x)'s fp */
+
+	while (old_fp != 0) {
+		printk("LR %llx FP %llx ", *((u64 *)old_fp + 1), old_fp);
+
+		printk("Args %llx %llx %llx %llx %llx \n",\
+				*((u64 *)old_fp - 2), *((u64 *)old_fp- 1), *(u64 *)old_fp, *((u64 *)old_fp+ 1), *((u64 *)old_fp+ 2));
+
+		/* old_fp 作为地址来看其后8字节是其caller的fp */
+		old_fp = *((u64 *)old_fp);
+	}
 
 	return 0;
 }

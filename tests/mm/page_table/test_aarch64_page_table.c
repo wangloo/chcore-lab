@@ -125,28 +125,45 @@ MU_TEST(test_map_unmap_page)
 	int i;
 	int j;
 
+
 	/* init vmspace */
 	// err = init_vmspace(&space);
 	//root = calloc(PAGE_SIZE, 1);
-	root = get_pages(0);
+	root = get_pages(0);	/* 分配4K对齐的大小为4KB的内存地址 */
 	// mu_assert_int_eq(0, err);
 
+	/* 刚分配的页表root无内容，所以查询va对应的pa一定会触发error */
+	printf("testing function 'query_in_pgtbl'...\n");
 	va = 0x100000;
 	err = query_in_pgtbl(root, va, &pa, &entry);
+	printf("err = %d\n", err);
 	mu_assert_int_eq(-ENOMAPPING, err);
 
+	/* 在 [va, va+PAGE_SIZE] 到 [pa, pa+PAGE_SIZE] 之间建立映射 */
+	printf("testing function 'map_range_in_pgtbl'...\n");
 	err = map_range_in_pgtbl(root, va, 0x100000, PAGE_SIZE, DEFAULT_FLAGS);
+	printf("err = %d\n", err);
 	mu_assert_int_eq(0, err);
 
+	/* 映射建立之后，再去查找va对应的pa，结果应该是0x100000 */
+	printf("testing function 'query_in_pgtbl'...\n");
 	err = query_in_pgtbl(root, va, &pa, &entry);
+	printf("err = %d\n", err);
+	printf("pa = 0x%llx\n", pa);
 	mu_assert_int_eq(0, err);
 	mu_check(pa == 0x100000);
 	// mu_check(flags == DEFAULT_FLAGS);
 
+	/* 测试取消va的映射关系 */
+	printf("testing function 'unmap_range_in_pgtbl'...\n");
 	err = unmap_range_in_pgtbl(root, va, PAGE_SIZE);
+	printf("err = %d\n", err);
 	mu_assert_int_eq(0, err);
 
+	/* 取消映射后，再查找va对应的pa一定是出错的 */
+	printf("testing function 'query_in_pgtbl'...\n");
 	err = query_in_pgtbl(root, va, &pa, &entry);
+	printf("err = %d\n", err);
 	mu_assert_int_eq(-ENOMAPPING, err);
 
 	srand(RND_SEED);
@@ -205,6 +222,8 @@ MU_TEST_SUITE(test_suite)
 
 int main(int argc, char *argv[])
 {
+	// printf("pa =================== %llx\n", (u64)pa);
+	
 	MU_RUN_SUITE(test_suite);
 	MU_REPORT();
 	return minunit_status;

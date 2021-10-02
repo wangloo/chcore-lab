@@ -245,6 +245,7 @@ BEGIN_FUNC(el1_mmu_activate)
 	isb
 
 	/* Write ttbr with phys addr of the translation table */
+	/* init_boot_pt()中初始化的页表基地址写入寄存器 */
 	adrp    x8, boot_ttbr0_l0
 	msr     ttbr0_el1, x8
 	adrp    x8, boot_ttbr1_l0

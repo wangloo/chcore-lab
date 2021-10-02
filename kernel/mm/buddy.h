@@ -33,19 +33,23 @@ struct phys_mem_pool {
 	/*
 	 * The start virtual address (for used in kernel) of
 	 * this physical memory pool.
+	 * 页面区的起始地址
 	 */
 	u64 pool_start_addr;
+	/* 页面区的大小 */
 	u64 pool_mem_size;
 
 	/*
 	 * This field is only used in ChCore unit test.
 	 * The number of (4k) physical pages in this physical memory pool.
+	 * 页面数量（初始设为最大:128000000）
 	 */
 	u64 pool_phys_page_num;
 
 	/*
 	 * The start virtual address (for used in kernel) of
 	 * the metadata area of this pool.
+	 * 页面元数据区的起始地址
 	 */
 	struct page *page_metadata;
 

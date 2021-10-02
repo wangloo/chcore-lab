@@ -25,6 +25,7 @@
 
 #include "page_table.h"
 
+
 /* Page_table.c: Use simple impl for debugging now. */
 
 extern void set_ttbr0_el1(paddr_t);
@@ -87,8 +88,8 @@ static int set_pte_flags(pte_t * entry, vmr_prop_t flags, int kind)
 static int get_next_ptp(ptp_t * cur_ptp, u32 level, vaddr_t va,
 			ptp_t ** next_ptp, pte_t ** pte, bool alloc)
 {
-	u32 index = 0;
-	pte_t *entry;
+	u32 index = 0;	/* 页表项索引 */
+	pte_t *entry;	/* 页表项指针 */
 
 	if (cur_ptp == NULL)
 		return -ENOMAPPING;
@@ -138,10 +139,11 @@ static int get_next_ptp(ptp_t * cur_ptp, u32 level, vaddr_t va,
 	}
 	*next_ptp = (ptp_t *) GET_NEXT_PTP(entry);
 	*pte = entry;
+	/* pte所在的页存放的是页表项还是数据 */
 	if (IS_PTE_TABLE(entry->pte))
-		return NORMAL_PTP;
+		return NORMAL_PTP;	/* 页表页 */
 	else
-		return BLOCK_PTP;
+		return BLOCK_PTP;	/* 数据页 */
 }
 
 /*
@@ -162,6 +164,45 @@ static int get_next_ptp(ptp_t * cur_ptp, u32 level, vaddr_t va,
 int query_in_pgtbl(vaddr_t * pgtbl, vaddr_t va, paddr_t * pa, pte_t ** entry)
 {
 	// <lab2>
+
+	u32 level = 0;
+	ptp_t *cur_ptp = NULL;	/* 指向当前页表 */
+	ptp_t *next_ptp = NULL;	/* 指向下一级页表 */
+	pte_t *cur_pte = NULL;	/* 指向当前页表中va确定的页表项 */
+	bool alloc = false;
+	int ret = 0;
+
+	/* 首先找到一级页表 */
+	cur_ptp = (ptp_t *)pgtbl;
+
+	/* 循环找到va对应的四级页表项 */
+	while (level < 4) {
+		ret = get_next_ptp(cur_ptp, level, va, &next_ptp, &cur_pte, alloc);
+
+		if (ret == BLOCK_PTP) {
+			/* 搜索到了真实的物理页地址，出错 */
+			return -ENOMAPPING;
+		} else if (ret < 0) {
+			/* 发生其他错误，抛出 */	
+			return ret;
+		}
+
+		level++;
+		cur_ptp = next_ptp;
+	}
+
+	/* while 正常退出时，cur_ptp = next_ptp = 真实物理页面的地址 */
+    /* cur_pte 指向四级页表的页表项 */
+	if (ret != NORMAL_PTP || level != 4) {
+		return -ENOMAPPING;		//--------------------------------------------------（1）
+	} else if (!cur_pte->l3_page.is_page || !cur_pte->l3_page.is_valid) {
+		/* 检查页表项是否有效 */
+		return -ENOMAPPING; 
+	}
+
+	
+	*entry = cur_pte; 
+	*pa = (paddr_t)cur_ptp + GET_VA_OFFSET_L3(va);
 
 	// </lab2>
 	return 0;
@@ -187,6 +228,46 @@ int map_range_in_pgtbl(vaddr_t * pgtbl, vaddr_t va, paddr_t pa,
 {
 	// <lab2>
 
+	u32 level = 0;
+	ptp_t *cur_ptp = NULL;	/* 指向当前页表 */
+	ptp_t *next_ptp = NULL;	/* 指向下一级页表 */
+	pte_t *cur_pte = NULL;	/* 指向当前页表中va确定的页表项 */
+	int ret = 0;
+
+	vaddr_t va_end = va + len;	/* 需要映射的末尾虚拟地址 */
+
+	
+	/* 因为映射是以页为单位的，需按页遍历 */
+	for (; va < va_end; va += PAGE_SIZE, pa += PAGE_SIZE) {
+
+		cur_ptp = (ptp_t *)pgtbl;	//----------------------------------------------（1）
+		level = 0;
+
+		/* 找到四级页表的起始地址就停止 */
+		while (level < 3) {		
+			ret = get_next_ptp(cur_ptp, level, va, &next_ptp, &cur_pte, true);//----（2）
+
+			level++;
+			cur_ptp = next_ptp;
+		}                    	//--------------------------------------------------（3）
+
+		/* 找到L3_page中对应的页表项 */
+		u32 index = GET_L3_INDEX(va);
+		cur_pte = &(cur_ptp->ent[index]);
+
+		/* 将pa写入页表项，并配置属性 */
+		cur_pte->l3_page.is_valid = 1;
+		cur_pte->l3_page.is_page = 1;
+		cur_pte->l3_page.pfn = pa >> PAGE_SHIFT;
+
+		/* 设置属性 */
+		set_pte_flags(cur_pte, flags, KERNEL_PTE);
+
+	}
+
+	flush_tlb();  /* 刷新TLB */
+
+
 	// </lab2>
 	return 0;
 }
@@ -207,6 +288,43 @@ int map_range_in_pgtbl(vaddr_t * pgtbl, vaddr_t va, paddr_t pa,
 int unmap_range_in_pgtbl(vaddr_t * pgtbl, vaddr_t va, size_t len)
 {
 	// <lab2>
+
+	int ret = 0;
+	u32 level = 0;
+	ptp_t *cur_ptp = NULL;
+	ptp_t *next_ptp = NULL;
+	pte_t *next_pte = NULL;
+	vaddr_t va_end = va + len;
+	
+	for (; va < va_end; va += PAGE_SIZE) {
+
+		cur_ptp = (ptp_t *)pgtbl;
+		level = 0;
+
+		while (level < 3) {
+			ret = get_next_ptp(cur_ptp, level, va, &next_ptp, &next_pte, false);
+			if (ret < 0) {
+				/* 无效的页面不需要unmap */
+				break;
+			}
+
+			level++;
+			cur_ptp = next_ptp;
+		}
+
+		if (ret == NORMAL_PTP && level == 3 && cur_ptp != NULL) {
+			/* unmap page */
+			/* 找到L3_page中对应的页表项 */
+			u32 index = GET_L3_INDEX(va);
+			next_pte = &(cur_ptp->ent[index]);
+
+			next_pte->pte = 0;
+				
+		}
+
+	}
+
+	flush_tlb();
 
 	// </lab2>
 	return 0;
